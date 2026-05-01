@@ -88,9 +88,18 @@ export default function Home() {
       event.target.reset();
       setStatus({ type: "success", message: "Your alumni memory is saved. This batch wall just got more special." });
     } catch (error) {
+      const isApiMissing =
+        !error.response &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1";
+
       setStatus({
         type: "error",
-        message: error.response?.data?.message || "Could not save your entry. Please try again."
+        message:
+          error.response?.data?.message ||
+          (isApiMissing
+            ? "Backend API is not connected. Please set VITE_API_URL in Netlify to your deployed backend URL."
+            : "Could not save your entry. Please try again.")
       });
     } finally {
       setLoading(false);
