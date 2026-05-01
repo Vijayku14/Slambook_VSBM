@@ -1,0 +1,15 @@
+{
+  "name": "digital-slam-book",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack Digital Slam Book for students using React, Express, MongoDB, and Tailwind CSS.",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "install-all": "npm install --prefix server && npm install --prefix client",
+    "start": "npm start --prefix server",
+    "build": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
