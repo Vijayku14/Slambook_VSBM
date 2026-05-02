@@ -42,6 +42,10 @@ app.use(express.json());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(uploadsPath));
 
+app.get("/", (_req, res) => {
+  res.send("Digital Slam Book API is running.");
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", app: "Digital Slam Book" });
 });
