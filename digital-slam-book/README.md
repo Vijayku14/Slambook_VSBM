@@ -1,6 +1,6 @@
 # College Passout Digital Slam Book
 
-A full-stack alumni/passout slam book app for college students with a public submission form, gallery, admin dashboard, local image uploads, JWT login, likes, and PDF export.
+A full-stack alumni/passout slam book app for college students with a public submission form, gallery, admin dashboard, local image uploads, JWT login, likes, PDF export, and Firebase Firestore database.
 
 ## Alumni Features
 
@@ -18,7 +18,7 @@ achievements, advice for juniors, and photo.
 ```text
 digital-slam-book/
   client/                 React + Tailwind frontend
-  server/                 Express + MongoDB backend
+  server/                 Express + Firebase Firestore backend
     uploads/              Locally uploaded images
 ```
 
@@ -37,7 +37,7 @@ npm run install-all
 cp server/.env.example server/.env
 ```
 
-3. Start MongoDB locally or use MongoDB Atlas.
+3. Create a Firebase project and add the Firebase Admin SDK credentials to `server/.env`.
 
 4. Run the app:
 
@@ -72,9 +72,32 @@ POST   /api/auth/login        Admin login
 GET    /api/auth/me           Verify admin session
 ```
 
+## Firebase Firestore Setup
+
+1. Go to `https://console.firebase.google.com`.
+2. Click `Add project`.
+3. Create a project, for example `vsbm-digital-slam-book`.
+4. In the left menu, open `Build > Firestore Database`.
+5. Click `Create database`.
+6. Choose `Start in production mode`.
+7. Choose a nearby region and create the database.
+8. Go to `Project settings > Service accounts`.
+9. Click `Generate new private key`.
+10. Download the JSON file and keep it private.
+
+From that JSON file, copy these values into Render or `server/.env`:
+
+```text
+project_id      -> FIREBASE_PROJECT_ID
+client_email    -> FIREBASE_CLIENT_EMAIL
+private_key     -> FIREBASE_PRIVATE_KEY
+```
+
+Important: never commit the downloaded Firebase JSON key file to GitHub.
+
 ## Deploy Frontend on Netlify
 
-Netlify should deploy the React frontend. The Express backend needs a Node host such as Render, Railway, Fly.io, or a VPS.
+Netlify should deploy the React frontend. The Express + Firebase Admin backend needs a Node host such as Render, Railway, Fly.io, or a VPS.
 
 ### Netlify Build Settings
 
@@ -102,11 +125,13 @@ On your backend host, set:
 
 ```text
 PORT=5000
-MONGO_URI=your_mongodb_atlas_connection_string
 CLIENT_URL=https://your-netlify-site.netlify.app
 JWT_SECRET=a_long_random_secret
 ADMIN_EMAIL=your_admin_email
 ADMIN_PASSWORD=your_strong_password
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----\n
 ```
 
 If you use a custom domain and a Netlify preview URL, you can allow multiple frontend origins:

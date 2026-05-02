@@ -6,8 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from "url";
-import { connectDB } from "./config/db.js";
-import Admin from "./models/Admin.js";
+import { db, Timestamp } from "./config/firebase.js";
 import authRoutes from "./routes/authRoutes.js";
 import slamRoutes from "./routes/slamRoutes.js";
 
@@ -61,19 +60,23 @@ app.use((err, _req, res, _next) => {
 });
 
 async function ensureAdmin() {
-  const email = process.env.ADMIN_EMAIL || "admin@slambook.local";
+  const email = (process.env.ADMIN_EMAIL || "admin@slambook.local").toLowerCase();
   const password = process.env.ADMIN_PASSWORD || "admin123";
-  const existing = await Admin.findOne({ email });
+  const adminsCollection = db.collection("admins");
+  const existing = await adminsCollection.where("email", "==", email).limit(1).get();
 
-  if (!existing) {
+  if (existing.empty) {
     const hashedPassword = await bcrypt.hash(password, 12);
-    await Admin.create({ email, password: hashedPassword });
+    await adminsCollection.add({
+      email,
+      password: hashedPassword,
+      createdAt: Timestamp.now()
+    });
     console.log(`Admin user created: ${email}`);
   }
 }
 
 async function start() {
-  await connectDB();
   await ensureAdmin();
 
   app.listen(port, () => {

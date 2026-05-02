@@ -3,7 +3,7 @@ import path from "path";
 import express from "express";
 import PDFDocument from "pdfkit";
 import { fileURLToPath } from "url";
-import SlamEntry from "../models/SlamEntry.js";
+import { db, FieldValue, Timestamp } from "../config/firebase.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 
@@ -11,9 +11,19 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const serverRoot = path.join(__dirname, "..", "..");
+const entriesCollection = db.collection("slamEntries");
 
 function clean(value = "") {
   return String(value).trim();
+}
+
+function serializeEntry(id, data) {
+  return {
+    _id: id,
+    ...data,
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt
+  };
 }
 
 function validateEntry(body) {
@@ -41,7 +51,7 @@ router.post("/", upload.single("image"), async (req, res, next) => {
       return res.status(400).json({ message: validationError });
     }
 
-    const entry = await SlamEntry.create({
+    const entryData = {
       name: clean(req.body.name),
       nickname: clean(req.body.nickname),
       collegeName: clean(req.body.collegeName),
@@ -57,8 +67,14 @@ router.post("/", upload.single("image"), async (req, res, next) => {
       favoriteTeacher: clean(req.body.favoriteTeacher),
       adviceForJuniors: clean(req.body.adviceForJuniors),
       achievements: clean(req.body.achievements),
-      image: req.file ? `/uploads/${req.file.filename}` : ""
-    });
+      image: req.file ? `/uploads/${req.file.filename}` : "",
+      likes: 0,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    };
+
+    const docRef = await entriesCollection.add(entryData);
+    const entry = serializeEntry(docRef.id, entryData);
 
     return res.status(201).json(entry);
   } catch (error) {
@@ -69,18 +85,18 @@ router.post("/", upload.single("image"), async (req, res, next) => {
 router.get("/", async (req, res, next) => {
   try {
     const search = clean(req.query.search);
-    const query = search
-      ? {
-          $or: [
-            { name: { $regex: search, $options: "i" } },
-            { collegeName: { $regex: search, $options: "i" } },
-            { department: { $regex: search, $options: "i" } },
-            { batchYear: { $regex: search, $options: "i" } },
-            { rollNumber: { $regex: search, $options: "i" } }
-          ]
-        }
-      : {};
-    const entries = await SlamEntry.find(query).sort({ createdAt: -1 });
+    const snapshot = await entriesCollection.orderBy("createdAt", "desc").get();
+    let entries = snapshot.docs.map((doc) => serializeEntry(doc.id, doc.data()));
+
+    if (search) {
+      const term = search.toLowerCase();
+      entries = entries.filter((entry) =>
+        [entry.name, entry.collegeName, entry.department, entry.batchYear, entry.rollNumber]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(term))
+      );
+    }
+
     return res.json(entries);
   } catch (error) {
     return next(error);
@@ -89,15 +105,19 @@ router.get("/", async (req, res, next) => {
 
 router.post("/:id/like", async (req, res, next) => {
   try {
-    const entry = await SlamEntry.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { likes: 1 } },
-      { new: true }
-    );
+    const docRef = entriesCollection.doc(req.params.id);
+    const doc = await docRef.get();
 
-    if (!entry) {
+    if (!doc.exists) {
       return res.status(404).json({ message: "Entry not found." });
     }
+
+    await docRef.update({
+      likes: FieldValue.increment(1),
+      updatedAt: Timestamp.now()
+    });
+    const updatedDoc = await docRef.get();
+    const entry = serializeEntry(updatedDoc.id, updatedDoc.data());
 
     return res.json(entry);
   } catch (error) {
@@ -107,7 +127,8 @@ router.post("/:id/like", async (req, res, next) => {
 
 router.get("/export/pdf", requireAdmin, async (_req, res, next) => {
   try {
-    const entries = await SlamEntry.find().sort({ createdAt: -1 });
+    const snapshot = await entriesCollection.orderBy("createdAt", "desc").get();
+    const entries = snapshot.docs.map((doc) => serializeEntry(doc.id, doc.data()));
     const doc = new PDFDocument({ margin: 48 });
 
     res.setHeader("Content-Type", "application/pdf");
@@ -121,7 +142,8 @@ router.get("/export/pdf", requireAdmin, async (_req, res, next) => {
       doc.fontSize(15).text(`${index + 1}. ${entry.name}${entry.nickname ? ` (${entry.nickname})` : ""}`);
       doc.fontSize(11).text(`College: ${entry.collegeName || "N/A"}`);
       doc.text(`Batch: ${entry.batchYear || "N/A"} | Department: ${entry.department || "N/A"} | Roll No: ${entry.rollNumber || "N/A"}`);
-      doc.fontSize(10).fillColor("#555").text(new Date(entry.createdAt).toLocaleString());
+      const createdAt = new Date(entry.createdAt);
+      doc.fontSize(10).fillColor("#555").text(createdAt.toLocaleString());
       doc.fillColor("#111").moveDown(0.4);
       doc.fontSize(11).text(`Current Status: ${entry.currentStatus || "N/A"}${entry.currentCity ? `, ${entry.currentCity}` : ""}`);
       doc.text(`Best College Memory: ${entry.memory || "N/A"}`);
@@ -151,16 +173,21 @@ router.get("/export/pdf", requireAdmin, async (_req, res, next) => {
 
 router.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
-    const entry = await SlamEntry.findByIdAndDelete(req.params.id);
+    const docRef = entriesCollection.doc(req.params.id);
+    const doc = await docRef.get();
 
-    if (!entry) {
+    if (!doc.exists) {
       return res.status(404).json({ message: "Entry not found." });
     }
+
+    const entry = doc.data();
 
     if (entry.image) {
       const imagePath = path.join(serverRoot, entry.image.replace(/^\//, ""));
       if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
     }
+
+    await docRef.delete();
 
     return res.json({ message: "Entry deleted." });
   } catch (error) {

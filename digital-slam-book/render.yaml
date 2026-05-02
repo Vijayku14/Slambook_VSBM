@@ -8,8 +8,6 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22.16.0
-      - key: MONGO_URI
-        sync: false
       - key: CLIENT_URL
         sync: false
       - key: JWT_SECRET
@@ -17,4 +15,10 @@ services:
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
         sync: false
